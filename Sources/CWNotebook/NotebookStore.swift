@@ -3,19 +3,22 @@ import Observation
 import AppKit
 
 /// Notes are plain `.md` files in iCloud Drive › CW Notebook (or ~/Documents if iCloud
-/// Drive is off). Deleted notes move to a `Trash` folder inside it, so they sync too.
-/// iCloud syncs the folder between Macs; the store polls it so edits made elsewhere
-/// show up here.
+/// Drive is off). Unfiled notes sit at the top level; each folder is a subfolder.
+/// Deleted notes move to `Trash/`, under a subfolder named after the folder they came
+/// from, so Restore can put them back. iCloud syncs it all between Macs; the store
+/// polls the folder so changes made elsewhere show up here.
 @Observable @MainActor
 final class NotebookStore {
     private(set) var notes: [Note] = []
+    private(set) var folders: [String] = []
     /// Notes in the Trash, most recently deleted first.
     private(set) var trashed: [Note] = []
     var lastError: String?
 
-    let folder: URL
+    let root: URL
     let usesICloud: Bool
-    var trashFolder: URL { folder.appending(path: "Trash", directoryHint: .isDirectory) }
+    static let trashName = "Trash"
+    var trashRoot: URL { root.appending(path: Self.trashName, directoryHint: .isDirectory) }
 
     @ObservationIgnored private var signature: [URL: Date] = [:]
     @ObservationIgnored private var timer: Timer?
@@ -25,84 +28,182 @@ final class NotebookStore {
         let iCloudDrive = FileManager.default.homeDirectoryForCurrentUser
             .appending(path: "Library/Mobile Documents/com~apple~CloudDocs", directoryHint: .isDirectory)
         if FileManager.default.fileExists(atPath: iCloudDrive.path) {
-            folder = iCloudDrive.appending(path: "CW Notebook", directoryHint: .isDirectory)
+            root = iCloudDrive.appending(path: "CW Notebook", directoryHint: .isDirectory)
             usesICloud = true
         } else {
-            folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                 .appending(path: "CW Notebook", directoryHint: .isDirectory)
             usesICloud = false
         }
-        try? fm.createDirectory(at: trashFolder, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: trashRoot, withIntermediateDirectories: true)
         reloadIfChanged()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.reloadIfChanged() }
         }
     }
 
+    // MARK: Lookup
+
     func note(_ id: Note.ID) -> Note? { notes.first { $0.id == id } }
     func trashedNote(_ id: Note.ID) -> Note? { trashed.first { $0.id == id } }
+    func notes(in folder: String?) -> [Note] { notes.filter { $0.folder == folder } }
 
-    private func url(for id: Note.ID) -> URL { folder.appending(path: "\(id).md") }
-    private func trashURL(for id: Note.ID) -> URL { trashFolder.appending(path: "\(id).md") }
+    private func dir(_ folder: String?) -> URL {
+        folder.map { root.appending(path: $0, directoryHint: .isDirectory) } ?? root
+    }
+    private func trashDir(_ folder: String?) -> URL {
+        folder.map { trashRoot.appending(path: $0, directoryHint: .isDirectory) } ?? trashRoot
+    }
+    private func url(_ note: Note) -> URL { dir(note.folder).appending(path: "\(note.id).md") }
+    private func trashURL(_ note: Note) -> URL { trashDir(note.folder).appending(path: "\(note.id).md") }
 
-    // MARK: Editing
+    // MARK: Notes
 
-    func create() -> Note {
-        let note = Note(id: UUID().uuidString, text: "", modified: Date())
-        write(note.text, to: url(for: note.id))
+    func create(in folder: String?) -> Note {
+        let note = Note(id: UUID().uuidString, text: "", modified: Date(), folder: folder)
+        write(note.text, to: url(note))
         notes.insert(note, at: 0)
         return note
     }
 
     func save(_ id: Note.ID, text: String) {
         guard let i = notes.firstIndex(where: { $0.id == id }), notes[i].text != text else { return }
-        write(text, to: url(for: id))
+        write(text, to: url(notes[i]))
         notes[i].text = text
         notes[i].modified = Date()
         notes.sort { $0.modified > $1.modified }
     }
 
-    // MARK: Trash
-
-    func moveToTrash(_ id: Note.ID) {
-        guard var note = note(id), move(url(for: id), to: trashURL(for: id)) else { return }
-        // The file's date becomes the deletion date, so the Trash lists newest first.
-        note.modified = Date()
-        try? fm.setAttributes([.modificationDate: note.modified], ofItemAtPath: trashURL(for: id).path)
-        notes.removeAll { $0.id == id }
-        trashed.insert(note, at: 0)
-        signature = currentSignature()
-    }
-
-    func restore(_ id: Note.ID) {
-        guard let note = trashedNote(id), move(trashURL(for: id), to: url(for: id)) else { return }
-        trashed.removeAll { $0.id == id }
-        notes.append(note)
-        notes.sort { $0.modified > $1.modified }
-        signature = currentSignature()
-    }
-
-    func deletePermanently(_ id: Note.ID) {
-        remove(trashURL(for: id))
-        trashed.removeAll { $0.id == id }
-        signature = currentSignature()
-    }
-
-    func emptyTrash() {
-        for note in trashed { remove(trashURL(for: note.id)) }
-        trashed.removeAll()
+    func move(_ id: Note.ID, to folder: String?) {
+        guard let i = notes.firstIndex(where: { $0.id == id }), notes[i].folder != folder else { return }
+        var moved = notes[i]
+        moved.folder = folder
+        try? fm.createDirectory(at: dir(folder), withIntermediateDirectories: true)
+        guard move(url(notes[i]), to: url(moved)) else { return }
+        notes[i] = moved
         signature = currentSignature()
     }
 
     /// For a new note left blank: removed outright rather than put in the Trash.
     func discard(_ id: Note.ID) {
-        remove(url(for: id))
+        guard let note = note(id) else { return }
+        remove(url(note))
         notes.removeAll { $0.id == id }
         signature = currentSignature()
     }
 
+    // MARK: Trash
+
+    func moveToTrash(_ id: Note.ID) {
+        guard var note = note(id) else { return }
+        try? fm.createDirectory(at: trashDir(note.folder), withIntermediateDirectories: true)
+        guard move(url(note), to: trashURL(note)) else { return }
+        // The file's date becomes the deletion date, so the Trash lists newest first.
+        note.modified = Date()
+        try? fm.setAttributes([.modificationDate: note.modified], ofItemAtPath: trashURL(note).path)
+        notes.removeAll { $0.id == id }
+        trashed.insert(note, at: 0)
+        signature = currentSignature()
+    }
+
+    /// Puts the note back in the folder it came from, recreating the folder if needed.
+    func restore(_ id: Note.ID) {
+        guard let note = trashedNote(id) else { return }
+        try? fm.createDirectory(at: dir(note.folder), withIntermediateDirectories: true)
+        guard move(trashURL(note), to: url(note)) else { return }
+        trashed.removeAll { $0.id == id }
+        notes.append(note)
+        notes.sort { $0.modified > $1.modified }
+        if let f = note.folder, !folders.contains(f) { folders = sortedFolders(folders + [f]) }
+        removeEmptyTrashFolders()
+        signature = currentSignature()
+    }
+
+    func deletePermanently(_ id: Note.ID) {
+        guard let note = trashedNote(id) else { return }
+        remove(trashURL(note))
+        trashed.removeAll { $0.id == id }
+        removeEmptyTrashFolders()
+        signature = currentSignature()
+    }
+
+    func emptyTrash() {
+        for note in trashed { remove(trashURL(note)) }
+        trashed.removeAll()
+        removeEmptyTrashFolders()
+        signature = currentSignature()
+    }
+
+    // MARK: Folders
+
+    /// Returns an error message, or nil if the name is fine.
+    func problem(withFolderName name: String, renaming old: String? = nil) -> String? {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        if n.isEmpty { return "Give the folder a name." }
+        if n.contains("/") || n.contains(":") { return "Folder names can't contain / or :." }
+        if n.hasPrefix(".") { return "Folder names can't start with a full stop." }
+        if n.caseInsensitiveCompare(Self.trashName) == .orderedSame { return "“Trash” is already used by the app." }
+        if n.caseInsensitiveCompare("Notes") == .orderedSame { return "“Notes” is already used by the app." }
+        let clash = folders.contains { $0.caseInsensitiveCompare(n) == .orderedSame && $0 != old }
+        if clash { return "There's already a folder called “\(n)”." }
+        return nil
+    }
+
+    @discardableResult
+    func createFolder(_ name: String) -> String? {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        if let problem = problem(withFolderName: n) { lastError = problem; return nil }
+        do {
+            try fm.createDirectory(at: dir(n), withIntermediateDirectories: true)
+        } catch {
+            lastError = "Couldn't create folder: \(error.localizedDescription)"
+            return nil
+        }
+        lastError = nil
+        folders = sortedFolders(folders + [n])
+        signature = currentSignature()
+        return n
+    }
+
+    @discardableResult
+    func renameFolder(_ old: String, to name: String) -> String? {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        guard n != old else { return old }
+        if let problem = problem(withFolderName: n, renaming: old) { lastError = problem; return nil }
+        guard move(dir(old), to: dir(n)) else { return nil }
+        for i in notes.indices where notes[i].folder == old { notes[i].folder = n }
+        folders = sortedFolders(folders.map { $0 == old ? n : $0 })
+        signature = currentSignature()
+        return n
+    }
+
+    /// Moves the folder's notes to the Trash, then removes the folder.
+    func deleteFolder(_ name: String) {
+        for note in notes(in: name) { moveToTrash(note.id) }
+        let leftovers = (try? fm.contentsOfDirectory(atPath: dir(name).path))?.filter { !$0.hasPrefix(".") } ?? []
+        if leftovers.isEmpty {
+            remove(dir(name))
+        } else {
+            // Something other than notes is in there: leave it for the macOS Trash instead.
+            try? fm.trashItem(at: dir(name), resultingItemURL: nil)
+        }
+        folders.removeAll { $0 == name }
+        signature = currentSignature()
+    }
+
     func revealInFinder() {
-        NSWorkspace.shared.activateFileViewerSelecting([folder])
+        NSWorkspace.shared.activateFileViewerSelecting([root])
+    }
+
+    private func sortedFolders(_ list: [String]) -> [String] {
+        Array(Set(list)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    private func removeEmptyTrashFolders() {
+        for sub in scan(trashRoot).subdirs {
+            let rest = (try? fm.contentsOfDirectory(atPath: sub.path))?.filter { !$0.hasPrefix(".") } ?? []
+            if rest.isEmpty { remove(sub) }
+        }
     }
 
     // MARK: Files
@@ -133,7 +234,7 @@ final class NotebookStore {
             } catch { moveError = error }
         }
         if let error = coordError ?? moveError {
-            lastError = "Couldn't move note: \(error.localizedDescription)"
+            lastError = "Couldn't move: \(error.localizedDescription)"
             return false
         }
         lastError = nil
@@ -147,37 +248,70 @@ final class NotebookStore {
         }
     }
 
-    private func files(in dir: URL) -> [URL: Date] {
-        let keys: [URLResourceKey] = [.contentModificationDateKey]
-        guard let items = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: keys) else { return [:] }
-        var result: [URL: Date] = [:]
+    /// Note files (with dates) and visible subfolders directly inside `dir`.
+    private func scan(_ dir: URL) -> (files: [URL: Date], subdirs: [URL]) {
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .isDirectoryKey]
+        guard let items = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: keys) else { return ([:], []) }
+        var files: [URL: Date] = [:]
+        var subdirs: [URL] = []
         for url in items {
             let name = url.lastPathComponent
-            if name.hasPrefix("."), name.hasSuffix(".icloud") {
-                // In iCloud but not downloaded to this Mac yet: ask for it.
-                let real = dir.appending(path: String(name.dropFirst().dropLast(".icloud".count)))
-                try? fm.startDownloadingUbiquitousItem(at: real)
+            if name.hasPrefix(".") {
+                if name.hasSuffix(".icloud") {
+                    // In iCloud but not downloaded to this Mac yet: ask for it.
+                    let real = dir.appending(path: String(name.dropFirst().dropLast(".icloud".count)))
+                    try? fm.startDownloadingUbiquitousItem(at: real)
+                }
                 continue
             }
-            guard ["md", "txt"].contains(url.pathExtension.lowercased()) else { continue }
-            result[url] = (try? url.resourceValues(forKeys: Set(keys)).contentModificationDate) ?? .distantPast
+            let values = try? url.resourceValues(forKeys: Set(keys))
+            if values?.isDirectory == true {
+                subdirs.append(url)
+            } else if ["md", "txt"].contains(url.pathExtension.lowercased()) {
+                files[url] = values?.contentModificationDate ?? .distantPast
+            }
         }
-        return result
+        return (files, subdirs)
     }
 
+    /// Every note file plus every folder, so new or removed folders count as changes too.
     private func currentSignature() -> [URL: Date] {
-        files(in: folder).merging(files(in: trashFolder)) { a, _ in a }
+        var sig: [URL: Date] = [:]
+        func add(_ dir: URL, recurse: Bool) {
+            let s = scan(dir)
+            sig.merge(s.files) { a, _ in a }
+            for sub in s.subdirs {
+                sig[sub] = .distantPast
+                if recurse { add(sub, recurse: false) }
+            }
+        }
+        add(root, recurse: true)  // includes Trash and its subfolders
+        return sig
     }
 
     func reloadIfChanged() {
         let sig = currentSignature()
         guard sig != signature else { return }
         signature = sig
-        notes = load(files(in: folder))
-        trashed = load(files(in: trashFolder))
+
+        let top = scan(root)
+        var loaded = load(top.files, folder: nil)
+        var names: [String] = []
+        for sub in top.subdirs where sub.lastPathComponent != Self.trashName {
+            let name = sub.lastPathComponent
+            names.append(name)
+            loaded += load(scan(sub).files, folder: name)
+        }
+        notes = loaded.sorted { $0.modified > $1.modified }
+        folders = sortedFolders(names)
+
+        let trash = scan(trashRoot)
+        var bin = load(trash.files, folder: nil)
+        for sub in trash.subdirs { bin += load(scan(sub).files, folder: sub.lastPathComponent) }
+        trashed = bin.sorted { $0.modified > $1.modified }
     }
 
-    private func load(_ files: [URL: Date]) -> [Note] {
+    private func load(_ files: [URL: Date], folder: String?) -> [Note] {
         files.compactMap { url, date in
             var text: String?
             var err: NSError?
@@ -185,8 +319,7 @@ final class NotebookStore {
                 text = try? String(contentsOf: target, encoding: .utf8)
             }
             guard let text else { return nil }
-            return Note(id: url.deletingPathExtension().lastPathComponent, text: text, modified: date)
+            return Note(id: url.deletingPathExtension().lastPathComponent, text: text, modified: date, folder: folder)
         }
-        .sorted { $0.modified > $1.modified }
     }
 }

@@ -11,12 +11,13 @@ A simple macOS note taker for CW, in the style of Apple Notes, with a Morse/CW r
 - Everything you type or paste comes out in capitals with Caps Lock off, so the ⇪ indicator never appears.
 - Prediction, autocorrect, spell check, text completion, smart quotes and dashes, and Writing Tools are all off in the editor.
 - **⇧⌘M** switches between a monospaced and a regular font.
-- Notes can be searched from the sidebar.
-- **Trash**: deleting a note moves it to the app's Trash (switch at the top of the sidebar), stored in `CW Notebook/Trash` in iCloud Drive so it syncs too. From there you can **Restore** a note, **Delete Permanently**, or **Empty Trash**; both permanent options ask first. A new note left blank is simply discarded.
+- **Folders**: the sidebar lists **Notes** (unfiled), your folders, and **Trash**. **⇧⌘N** or **New Folder** creates one; right-click a folder to rename or delete it (its notes go to the Trash). Drag a note onto a folder, or right-click it and use **Move to**, to file it.
+- Search covers the folder you're in.
+- **Trash**: deleting a note moves it to the app's Trash, stored in `CW Notebook/Trash` in iCloud Drive so it syncs too. Restore puts a note back in the folder it came from. From there you can **Restore** a note, **Delete Permanently**, or **Empty Trash**; both permanent options ask first. A new note left blank is simply discarded.
 
 ## Where notes are stored
 
-Each note is a plain `.md` text file in **iCloud Drive › CW Notebook**, so it syncs to your other Macs and opens in any text editor. If iCloud Drive is off, notes go to `~/Documents/CW Notebook` instead.
+Each note is a plain `.md` text file in **iCloud Drive › CW Notebook**, with each folder as a subfolder, so it syncs to your other Macs and opens in any text editor. If iCloud Drive is off, notes go to `~/Documents/CW Notebook` instead.
 
 ## Build
 

@@ -2,6 +2,7 @@ import SwiftUI
 
 extension Notification.Name {
     static let newNote = Notification.Name("CWNotebook.newNote")
+    static let newFolder = Notification.Name("CWNotebook.newFolder")
     /// `object` is the String to insert at the cursor of the open note.
     static let insertText = Notification.Name("CWNotebook.insertText")
     static let focusBody = Notification.Name("CWNotebook.focusBody")
@@ -37,6 +38,8 @@ struct NotebookCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Note") { NotificationCenter.default.post(name: .newNote, object: nil) }
                 .keyboardShortcut("n")
+            Button("New Folder") { NotificationCenter.default.post(name: .newFolder, object: nil) }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
         }
         CommandGroup(after: .pasteboard) {
             Divider()

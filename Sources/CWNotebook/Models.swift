@@ -6,6 +6,8 @@ struct Note: Identifiable, Hashable {
     let id: String
     var text: String
     var modified: Date
+    /// Folder the note lives in (or came from, for a note in the Trash); nil = unfiled.
+    var folder: String? = nil
 
     private var lines: [Substring] {
         text.split(separator: "\n", omittingEmptySubsequences: true)
