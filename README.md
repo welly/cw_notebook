@@ -10,7 +10,8 @@ A simple macOS note taker for CW, in the style of Apple Notes, with a Morse/CW r
 - Everything you type or paste comes out in capitals with Caps Lock off, so the ⇪ indicator never appears.
 - Prediction, autocorrect, spell check, text completion, smart quotes and dashes, and Writing Tools are all off in the editor.
 - **⇧⌘M** switches between a monospaced and a regular font.
-- Notes can be searched from the sidebar. Delete moves a note to the Trash.
+- Notes can be searched from the sidebar.
+- **Trash**: deleting a note moves it to the app's Trash (switch at the top of the sidebar), stored in `CW Notebook/Trash` in iCloud Drive so it syncs too. From there you can **Restore** a note, **Delete Permanently**, or **Empty Trash**; both permanent options ask first. A new note left blank is simply discarded.
 
 ## Where notes are stored
 

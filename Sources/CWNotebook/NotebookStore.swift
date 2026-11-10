@@ -3,15 +3,19 @@ import Observation
 import AppKit
 
 /// Notes are plain `.md` files in iCloud Drive › CW Notebook (or ~/Documents if iCloud
-/// Drive is off). iCloud syncs the folder between Macs; the store polls it so edits
-/// made elsewhere show up here.
+/// Drive is off). Deleted notes move to a `Trash` folder inside it, so they sync too.
+/// iCloud syncs the folder between Macs; the store polls it so edits made elsewhere
+/// show up here.
 @Observable @MainActor
 final class NotebookStore {
     private(set) var notes: [Note] = []
+    /// Notes in the Trash, most recently deleted first.
+    private(set) var trashed: [Note] = []
     var lastError: String?
 
     let folder: URL
     let usesICloud: Bool
+    var trashFolder: URL { folder.appending(path: "Trash", directoryHint: .isDirectory) }
 
     @ObservationIgnored private var signature: [URL: Date] = [:]
     @ObservationIgnored private var timer: Timer?
@@ -28,7 +32,7 @@ final class NotebookStore {
                 .appending(path: "CW Notebook", directoryHint: .isDirectory)
             usesICloud = false
         }
-        try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: trashFolder, withIntermediateDirectories: true)
         reloadIfChanged()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.reloadIfChanged() }
@@ -36,8 +40,10 @@ final class NotebookStore {
     }
 
     func note(_ id: Note.ID) -> Note? { notes.first { $0.id == id } }
+    func trashedNote(_ id: Note.ID) -> Note? { trashed.first { $0.id == id } }
 
     private func url(for id: Note.ID) -> URL { folder.appending(path: "\(id).md") }
+    private func trashURL(for id: Note.ID) -> URL { trashFolder.appending(path: "\(id).md") }
 
     // MARK: Editing
 
@@ -56,10 +62,41 @@ final class NotebookStore {
         notes.sort { $0.modified > $1.modified }
     }
 
-    /// Moves the file to the Trash so it can be recovered.
-    func delete(_ id: Note.ID) {
-        let u = url(for: id)
-        do { try fm.trashItem(at: u, resultingItemURL: nil) } catch { try? fm.removeItem(at: u) }
+    // MARK: Trash
+
+    func moveToTrash(_ id: Note.ID) {
+        guard var note = note(id), move(url(for: id), to: trashURL(for: id)) else { return }
+        // The file's date becomes the deletion date, so the Trash lists newest first.
+        note.modified = Date()
+        try? fm.setAttributes([.modificationDate: note.modified], ofItemAtPath: trashURL(for: id).path)
+        notes.removeAll { $0.id == id }
+        trashed.insert(note, at: 0)
+        signature = currentSignature()
+    }
+
+    func restore(_ id: Note.ID) {
+        guard let note = trashedNote(id), move(trashURL(for: id), to: url(for: id)) else { return }
+        trashed.removeAll { $0.id == id }
+        notes.append(note)
+        notes.sort { $0.modified > $1.modified }
+        signature = currentSignature()
+    }
+
+    func deletePermanently(_ id: Note.ID) {
+        remove(trashURL(for: id))
+        trashed.removeAll { $0.id == id }
+        signature = currentSignature()
+    }
+
+    func emptyTrash() {
+        for note in trashed { remove(trashURL(for: note.id)) }
+        trashed.removeAll()
+        signature = currentSignature()
+    }
+
+    /// For a new note left blank: removed outright rather than put in the Trash.
+    func discard(_ id: Note.ID) {
+        remove(url(for: id))
         notes.removeAll { $0.id == id }
         signature = currentSignature()
     }
@@ -84,15 +121,41 @@ final class NotebookStore {
         }
     }
 
-    private func currentSignature() -> [URL: Date] {
+    private func move(_ source: URL, to destination: URL) -> Bool {
+        var coordError: NSError?
+        var moveError: Error?
+        NSFileCoordinator().coordinate(writingItemAt: source, options: .forMoving,
+                                       writingItemAt: destination, options: .forReplacing,
+                                       error: &coordError) { from, to in
+            do {
+                if self.fm.fileExists(atPath: to.path) { try self.fm.removeItem(at: to) }
+                try self.fm.moveItem(at: from, to: to)
+            } catch { moveError = error }
+        }
+        if let error = coordError ?? moveError {
+            lastError = "Couldn't move note: \(error.localizedDescription)"
+            return false
+        }
+        lastError = nil
+        return true
+    }
+
+    private func remove(_ url: URL) {
+        var coordError: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: &coordError) { target in
+            try? self.fm.removeItem(at: target)
+        }
+    }
+
+    private func files(in dir: URL) -> [URL: Date] {
         let keys: [URLResourceKey] = [.contentModificationDateKey]
-        guard let items = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys) else { return [:] }
+        guard let items = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: keys) else { return [:] }
         var result: [URL: Date] = [:]
         for url in items {
             let name = url.lastPathComponent
             if name.hasPrefix("."), name.hasSuffix(".icloud") {
                 // In iCloud but not downloaded to this Mac yet: ask for it.
-                let real = folder.appending(path: String(name.dropFirst().dropLast(".icloud".count)))
+                let real = dir.appending(path: String(name.dropFirst().dropLast(".icloud".count)))
                 try? fm.startDownloadingUbiquitousItem(at: real)
                 continue
             }
@@ -102,11 +165,20 @@ final class NotebookStore {
         return result
     }
 
+    private func currentSignature() -> [URL: Date] {
+        files(in: folder).merging(files(in: trashFolder)) { a, _ in a }
+    }
+
     func reloadIfChanged() {
         let sig = currentSignature()
         guard sig != signature else { return }
         signature = sig
-        notes = sig.compactMap { url, date in
+        notes = load(files(in: folder))
+        trashed = load(files(in: trashFolder))
+    }
+
+    private func load(_ files: [URL: Date]) -> [Note] {
+        files.compactMap { url, date in
             var text: String?
             var err: NSError?
             NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &err) { target in
