@@ -4,7 +4,7 @@ A simple macOS note taker for CW, in the style of Apple Notes, with a Morse/CW r
 
 ## Using it
 
-- **⌘N** starts a new note. Type the title at the top, then Return or Tab to move into the body. The file keeps the title as its first line (`# TITLE`). A note you leave without typing anything is discarded.
+- **⌘N** starts a new note. Type the title at the top, then Return or Tab to move into the body. The file keeps the title as its first line (`# Title`). A note you leave without typing anything is discarded.
 - **⇧⌘T** inserts the current UTC time, e.g. `2026-11-10 2003Z`.
 - **⌥⌘R** shows or hides the **Reference** panel: prosigns, Q-codes and common abbreviations, each with its meaning. Searching matches both signs and meanings (e.g. "slower" finds QRS).
 - Everything you type or paste comes out in capitals with Caps Lock off, so the ⇪ indicator never appears.

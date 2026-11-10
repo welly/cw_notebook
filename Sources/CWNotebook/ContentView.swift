@@ -194,7 +194,7 @@ struct TrashedNoteView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(parts.title.isEmpty ? "UNTITLED" : parts.title)
+                    Text(parts.title.isEmpty ? "Untitled" : parts.title)
                         .font(monospaced ? .system(size: 20, weight: .semibold, design: .monospaced)
                                          : .system(size: 20, weight: .semibold))
                     Text(parts.body)
@@ -249,7 +249,7 @@ struct NoteEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PlainTextField(text: $title, placeholder: "TITLE", monospaced: monospaced, focusOnAppear: startInTitle)
+            PlainTextField(text: $title, placeholder: "Title", monospaced: monospaced, focusOnAppear: startInTitle)
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 10)

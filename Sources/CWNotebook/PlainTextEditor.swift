@@ -115,7 +115,7 @@ final class QuietTextField: NSTextField {
     }
 }
 
-/// Single-line counterpart for the note title: same capitals and no predictions.
+/// Single-line counterpart for the note title: no predictions, normal case.
 /// Return or Tab moves to the body.
 struct PlainTextField: NSViewRepresentable {
     @Binding var text: String
@@ -161,13 +161,7 @@ struct PlainTextField: NSViewRepresentable {
 
         func controlTextDidChange(_ n: Notification) {
             guard let tf = n.object as? NSTextField else { return }
-            let upper = tf.stringValue.uppercased()
-            if upper != tf.stringValue, let editor = tf.currentEditor() as? NSTextView, !editor.hasMarkedText() {
-                let selection = editor.selectedRange()
-                editor.string = upper
-                editor.setSelectedRange(NSRange(location: min(selection.location, (upper as NSString).length), length: 0))
-            }
-            parent.text = upper
+            parent.text = tf.stringValue
         }
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
