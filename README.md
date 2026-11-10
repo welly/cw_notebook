@@ -25,3 +25,5 @@ Needs macOS 15+ and the Xcode Command Line Tools.
 ```bash
 ./scripts/build-app.sh --install   # builds and copies to ~/Applications
 ```
+
+The app icon is drawn by `scripts/make-icon.swift`; run `swift scripts/make-icon.swift` to regenerate `Resources/AppIcon.icns`.
