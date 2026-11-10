@@ -216,8 +216,8 @@ struct NoteRow: View {
             Text(note.title).fontWeight(.semibold).lineLimit(1)
             Text(note.modified, format: .dateTime.day().month(.abbreviated).year().hour().minute())
                 .monospacedDigit()
-            .font(.caption)
-            .foregroundStyle(.secondary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 3)
     }
