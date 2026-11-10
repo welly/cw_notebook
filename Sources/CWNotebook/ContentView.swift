@@ -73,11 +73,7 @@ struct ContentView: View {
                     ToolbarItemGroup {
                         Button { newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
                             .help("New note (⌘N)")
-                        Button {
-                            NotificationCenter.default.post(name: .insertText, object: Date().utcStamp)
-                        } label: { Label("Insert UTC Time", systemImage: "clock") }
-                            .help("Insert the current UTC time (⇧⌘T)")
-                            .disabled(selection == nil || inTrash)
+                        UTCClockButton()
                         Toggle(isOn: $keepOnTop) {
                             Label("Keep on Top", systemImage: keepOnTop ? "pin.fill" : "pin")
                         }
@@ -455,5 +451,23 @@ struct WindowLevel: NSViewRepresentable {
             if floating { window.collectionBehavior.insert(.fullScreenAuxiliary) }
             else { window.collectionBehavior.remove(.fullScreenAuxiliary) }
         }
+    }
+}
+
+/// Live UTC time in the toolbar; click it to insert the time into the note.
+struct UTCClockButton: View {
+    var body: some View {
+        Button {
+            NotificationCenter.default.post(name: .insertText, object: Date().utcStamp)
+        } label: {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                Text(Date.utcClockFormatter.string(from: context.date))
+                    .font(.system(.body, design: .monospaced).weight(.medium))
+                    .monospacedDigit()
+                    .padding(.horizontal, 4)
+            }
+        }
+        .help("Current UTC time. Click to insert it into the note (⇧⌘T)")
+        .accessibilityLabel("Insert UTC time")
     }
 }

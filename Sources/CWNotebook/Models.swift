@@ -58,4 +58,13 @@ extension Date {
     }()
 
     var utcStamp: String { Date.utcStampFormatter.string(from: self) }
+
+    /// "20:31:05Z" for the toolbar clock.
+    static let utcClockFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = .gmt
+        f.dateFormat = "HH:mm:ss'Z'"
+        return f
+    }()
 }
