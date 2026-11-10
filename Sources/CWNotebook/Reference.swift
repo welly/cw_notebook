@@ -101,21 +101,40 @@ struct ReferencePanel: View {
                     }
                     if !rows.isEmpty {
                         Section(topic.title) {
-                            ForEach(rows) { e in
-                                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                    Text(e.sign)
-                                        .font(.body.monospaced().weight(.semibold))
-                                        .frame(minWidth: 44, alignment: .leading)
-                                    Text(e.meaning)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .textSelection(.enabled)
-                            }
+                            ForEach(rows) { e in ReferenceRow(entry: e) }
                         }
                     }
                 }
             }
             .listStyle(.sidebar)
         }
+    }
+}
+
+/// Click to insert the sign at the cursor in the open note.
+private struct ReferenceRow: View {
+    let entry: ReferenceEntry
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            NotificationCenter.default.post(name: .insertText, object: entry.sign + " ")
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(entry.sign)
+                    .font(.body.monospaced().weight(.semibold))
+                    .frame(minWidth: 44, alignment: .leading)
+                Text(entry.meaning)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Image(systemName: "text.insert")
+                    .foregroundStyle(.tertiary)
+                    .opacity(hovering ? 1 : 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Insert \(entry.sign) into the note")
     }
 }

@@ -13,6 +13,7 @@ extension Notification.Name {
 enum Prefs {
     static let monospaced = "monospaced"
     static let showReference = "showReference"
+    static let keepOnTop = "keepOnTop"
 }
 
 @main
@@ -33,6 +34,7 @@ struct NotebookCommands: Commands {
     let store: NotebookStore
     @AppStorage(Prefs.monospaced) private var monospaced = true
     @AppStorage(Prefs.showReference) private var showReference = false
+    @AppStorage(Prefs.keepOnTop) private var keepOnTop = false
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -61,6 +63,8 @@ struct NotebookCommands: Commands {
                 .keyboardShortcut("m", modifiers: [.command, .shift])
             Toggle("Show Reference", isOn: $showReference)
                 .keyboardShortcut("r", modifiers: [.command, .option])
+            Toggle("Keep Window on Top", isOn: $keepOnTop)
+                .keyboardShortcut("t", modifiers: [.command, .option])
             Divider()
             Button("Show Notes Folder in Finder") { store.revealInFinder() }
         }

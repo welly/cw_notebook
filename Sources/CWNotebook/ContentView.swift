@@ -15,6 +15,7 @@ enum Place: Hashable {
 struct ContentView: View {
     @Environment(NotebookStore.self) private var store
     @AppStorage(Prefs.showReference) private var showReference = false
+    @AppStorage(Prefs.keepOnTop) private var keepOnTop = false
     @State private var place: Place? = .unfiled
     @State private var selection: Note.ID?
     @State private var search = ""
@@ -40,6 +41,13 @@ struct ContentView: View {
         case .trash: base = store.trashed
         }
         return base.filter { $0.matches(search) }
+    }
+
+    /// Searching looks in every folder (or just the Trash, when you're in it).
+    private var isSearchingEverywhere: Bool { !search.isEmpty && !inTrash }
+
+    private var listedNotes: [Note] {
+        isSearchingEverywhere ? store.notes.filter { $0.matches(search) } : visibleNotes
     }
 
     private var placeTitle: String {
@@ -70,11 +78,16 @@ struct ContentView: View {
                         } label: { Label("Insert UTC Time", systemImage: "clock") }
                             .help("Insert the current UTC time (⇧⌘T)")
                             .disabled(selection == nil || inTrash)
+                        Toggle(isOn: $keepOnTop) {
+                            Label("Keep on Top", systemImage: keepOnTop ? "pin.fill" : "pin")
+                        }
+                        .help(keepOnTop ? "Window stays above other apps (⌥⌘T)" : "Keep this window above other apps (⌥⌘T)")
                         Button { showReference.toggle() } label: { Label("Reference", systemImage: "book") }
                             .help("Prosigns, Q-codes and abbreviations (⌥⌘R)")
                     }
                 }
         }
+        .background(WindowLevel(floating: keepOnTop))
         .onReceive(NotificationCenter.default.publisher(for: .newNote)) { _ in newNote() }
         .onReceive(NotificationCenter.default.publisher(for: .newFolder)) { _ in startNewFolder() }
         .onChange(of: selection) { old, _ in discardIfBlank(old) }
@@ -176,8 +189,8 @@ struct ContentView: View {
 
     private var noteList: some View {
         List(selection: $selection) {
-            ForEach(visibleNotes) { note in
-                NoteRow(note: note)
+            ForEach(listedNotes) { note in
+                NoteRow(note: note, showFolder: isSearchingEverywhere)
                     .tag(note.id)
                     .draggable(note.id)
                     .contextMenu { noteMenu(note) }
@@ -188,8 +201,8 @@ struct ContentView: View {
             guard let id = selection else { return }
             if inTrash { confirmDelete = id } else { moveToTrash(id) }
         }
-        .searchable(text: $search, prompt: "Search \(placeTitle)")
-        .navigationTitle(placeTitle)
+        .searchable(text: $search, prompt: inTrash ? "Search Trash" : "Search all notes")
+        .navigationTitle(isSearchingEverywhere ? "All Notes" : placeTitle)
         .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 360)
         .safeAreaInset(edge: .bottom) {
             if inTrash, !store.trashed.isEmpty {
@@ -217,7 +230,7 @@ struct ContentView: View {
     }
 
     @ViewBuilder private var emptyState: some View {
-        if visibleNotes.isEmpty {
+        if listedNotes.isEmpty {
             if !search.isEmpty {
                 ContentUnavailableView.search(text: search)
             } else if inTrash {
@@ -371,14 +384,22 @@ struct TrashedNoteView: View {
 
 struct NoteRow: View {
     let note: Note
+    var showFolder = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(note.title).fontWeight(.semibold).lineLimit(1)
-            Text(note.modified, format: .dateTime.day().month(.abbreviated).year().hour().minute())
-                .monospacedDigit()
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Text(note.modified, format: .dateTime.day().month(.abbreviated).year().hour().minute())
+                    .monospacedDigit()
+                if showFolder {
+                    Label(note.folder ?? "Notes", systemImage: note.folder == nil ? "note.text" : "folder")
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .padding(.vertical, 3)
     }
@@ -417,5 +438,22 @@ struct NoteEditor: View {
             store.save(id, text: fileText)
         }
         .onDisappear { store.save(id, text: fileText) }
+    }
+}
+
+/// Floats the window above other apps' windows when "Keep on Top" is on.
+struct WindowLevel: NSViewRepresentable {
+    var floating: Bool
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.level = floating ? .floating : .normal
+            // Also show over full-screen apps such as an SDR or logger.
+            if floating { window.collectionBehavior.insert(.fullScreenAuxiliary) }
+            else { window.collectionBehavior.remove(.fullScreenAuxiliary) }
+        }
     }
 }
