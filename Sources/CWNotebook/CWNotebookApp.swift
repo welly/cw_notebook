@@ -5,6 +5,8 @@ extension Notification.Name {
     /// `object` is the String to insert at the cursor of the open note.
     static let insertText = Notification.Name("CWNotebook.insertText")
     static let focusBody = Notification.Name("CWNotebook.focusBody")
+    /// `object` is a FormatCommand.
+    static let toggleFormat = Notification.Name("CWNotebook.toggleFormat")
 }
 
 enum Prefs {
@@ -42,6 +44,14 @@ struct NotebookCommands: Commands {
                 NotificationCenter.default.post(name: .insertText, object: Date().utcStamp)
             }
             .keyboardShortcut("t", modifiers: [.command, .shift])
+        }
+        CommandMenu("Format") {
+            Button("Bold") { NotificationCenter.default.post(name: .toggleFormat, object: FormatCommand.bold) }
+                .keyboardShortcut("b")
+            Button("Italic") { NotificationCenter.default.post(name: .toggleFormat, object: FormatCommand.italic) }
+                .keyboardShortcut("i")
+            Button("Underline") { NotificationCenter.default.post(name: .toggleFormat, object: FormatCommand.underline) }
+                .keyboardShortcut("u")
         }
         CommandGroup(after: .toolbar) {
             Toggle("Monospaced Font", isOn: $monospaced)

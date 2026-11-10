@@ -20,7 +20,7 @@ struct Note: Identifiable, Hashable {
     }
 
     var preview: String {
-        lines.dropFirst().first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        lines.dropFirst().first.map { NoteFormat.plain(String($0)).trimmingCharacters(in: .whitespaces) } ?? ""
     }
 
     /// File layout: "# TITLE", a blank line, then the body. A first line without "#" is

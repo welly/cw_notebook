@@ -192,19 +192,17 @@ struct TrashedNoteView: View {
             .padding(.vertical, 10)
             .background(.bar)
             Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(parts.title.isEmpty ? "Untitled" : parts.title)
-                        .font(monospaced ? .system(size: 20, weight: .semibold, design: .monospaced)
-                                         : .system(size: 20, weight: .semibold))
-                    Text(parts.body)
-                        .font(monospaced ? .system(size: 15, design: .monospaced) : .system(size: 15))
-                        .lineSpacing(3)
-                }
+            Text(parts.title.isEmpty ? "Untitled" : parts.title)
+                .font(monospaced ? .system(size: 20, weight: .semibold, design: .monospaced)
+                                 : .system(size: 20, weight: .semibold))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
-            }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 10)
+            Divider().padding(.horizontal, 16)
+            PlainTextEditor(text: .constant(parts.body), monospaced: monospaced,
+                            focusOnAppear: false, editable: false)
         }
         .background(Color(nsColor: .textBackgroundColor))
     }
