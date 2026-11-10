@@ -1,0 +1,58 @@
+import SwiftUI
+
+extension Notification.Name {
+    static let newNote = Notification.Name("CWNotebook.newNote")
+    /// `object` is the String to insert at the cursor of the open note.
+    static let insertText = Notification.Name("CWNotebook.insertText")
+}
+
+enum Prefs {
+    static let monospaced = "monospaced"
+    static let showReference = "showReference"
+    static let uppercase = "uppercase"
+}
+
+@main
+struct CWNotebookApp: App {
+    @State private var store = NotebookStore()
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environment(store)
+                .frame(minWidth: 720, minHeight: 460)
+        }
+        .commands { NotebookCommands(store: store) }
+    }
+}
+
+struct NotebookCommands: Commands {
+    let store: NotebookStore
+    @AppStorage(Prefs.monospaced) private var monospaced = true
+    @AppStorage(Prefs.showReference) private var showReference = false
+    @AppStorage(Prefs.uppercase) private var uppercase = true
+
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            Button("New Note") { NotificationCenter.default.post(name: .newNote, object: nil) }
+                .keyboardShortcut("n")
+        }
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            Button("Insert UTC Time") {
+                NotificationCenter.default.post(name: .insertText, object: Date().utcStamp)
+            }
+            .keyboardShortcut("t", modifiers: [.command, .shift])
+        }
+        CommandGroup(after: .toolbar) {
+            Toggle("Uppercase Typing", isOn: $uppercase)
+                .keyboardShortcut("u", modifiers: [.command, .shift])
+            Toggle("Monospaced Font", isOn: $monospaced)
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+            Toggle("Show Reference", isOn: $showReference)
+                .keyboardShortcut("r", modifiers: [.command, .option])
+            Divider()
+            Button("Show Notes Folder in Finder") { store.revealInFinder() }
+        }
+    }
+}
