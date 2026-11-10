@@ -23,6 +23,25 @@ struct Note: Identifiable, Hashable {
         lines.dropFirst().first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
     }
 
+    /// File layout: "# TITLE", a blank line, then the body. A first line without "#" is
+    /// still treated as the title, so plain text files written elsewhere work too.
+    static func split(_ text: String) -> (title: String, body: String) {
+        guard !text.isEmpty else { return ("", "") }
+        let firstBreak = text.firstIndex(of: "\n") ?? text.endIndex
+        var title = String(text[..<firstBreak]).trimmingCharacters(in: .whitespaces)
+        if title.hasPrefix("#") {
+            title = String(title.drop { $0 == "#" }).trimmingCharacters(in: .whitespaces)
+        }
+        var body = firstBreak < text.endIndex ? String(text[text.index(after: firstBreak)...]) : ""
+        if body.hasPrefix("\n") { body.removeFirst() }
+        return (title, body)
+    }
+
+    static func join(title: String, body: String) -> String {
+        if title.isEmpty && body.isEmpty { return "" }
+        return "# \(title)\n\n\(body)"
+    }
+
     var isBlank: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     func matches(_ query: String) -> Bool {

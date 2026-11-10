@@ -4,6 +4,7 @@ extension Notification.Name {
     static let newNote = Notification.Name("CWNotebook.newNote")
     /// `object` is the String to insert at the cursor of the open note.
     static let insertText = Notification.Name("CWNotebook.insertText")
+    static let focusBody = Notification.Name("CWNotebook.focusBody")
 }
 
 enum Prefs {

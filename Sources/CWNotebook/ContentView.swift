@@ -112,19 +112,34 @@ struct NoteEditor: View {
     @Environment(NotebookStore.self) private var store
     @AppStorage(Prefs.monospaced) private var monospaced = true
     let id: Note.ID
-    @State private var text: String
+    @State private var title: String
+    @State private var bodyText: String
+    private let startInTitle: Bool
 
     init(note: Note) {
         id = note.id
-        _text = State(initialValue: note.text)
+        let parts = Note.split(note.text)
+        _title = State(initialValue: parts.title)
+        _bodyText = State(initialValue: parts.body)
+        startInTitle = parts.title.isEmpty
     }
 
+    private var fileText: String { Note.join(title: title, body: bodyText) }
+
     var body: some View {
-        PlainTextEditor(text: $text, monospaced: monospaced)
-            .task(id: text) {
-                guard (try? await Task.sleep(for: .milliseconds(400))) != nil else { return }
-                store.save(id, text: text)
-            }
-            .onDisappear { store.save(id, text: text) }
+        VStack(spacing: 0) {
+            PlainTextField(text: $title, placeholder: "TITLE", monospaced: monospaced, focusOnAppear: startInTitle)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 10)
+            Divider().padding(.horizontal, 16)
+            PlainTextEditor(text: $bodyText, monospaced: monospaced, focusOnAppear: !startInTitle)
+        }
+        .background(Color(nsColor: .textBackgroundColor))
+        .task(id: fileText) {
+            guard (try? await Task.sleep(for: .milliseconds(400))) != nil else { return }
+            store.save(id, text: fileText)
+        }
+        .onDisappear { store.save(id, text: fileText) }
     }
 }
