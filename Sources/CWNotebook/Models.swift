@@ -19,10 +19,6 @@ struct Note: Identifiable, Hashable {
         return t.isEmpty ? "New Note" : String(t.prefix(80))
     }
 
-    var preview: String {
-        lines.dropFirst().first.map { NoteFormat.plain(String($0)).trimmingCharacters(in: .whitespaces) } ?? ""
-    }
-
     /// File layout: "# TITLE", a blank line, then the body. A first line without "#" is
     /// still treated as the title, so plain text files written elsewhere work too.
     static func split(_ text: String) -> (title: String, body: String) {

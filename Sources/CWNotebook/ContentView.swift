@@ -214,12 +214,8 @@ struct NoteRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(note.title).fontWeight(.semibold).lineLimit(1)
-            HStack(spacing: 6) {
-                Text(note.modified, format: Calendar.current.isDateInToday(note.modified)
-                     ? .dateTime.hour().minute() : .dateTime.day().month(.abbreviated).year(.twoDigits))
-                    .monospacedDigit()
-                Text(note.preview).lineLimit(1)
-            }
+            Text(note.modified, format: .dateTime.day().month(.abbreviated).year().hour().minute())
+                .monospacedDigit()
             .font(.caption)
             .foregroundStyle(.secondary)
         }
