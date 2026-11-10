@@ -2,12 +2,11 @@ import AppKit
 import SwiftUI
 
 /// A bare NSTextView: no predictions, autocorrect, completion, spell check, smart
-/// punctuation or Writing Tools. Optionally upper-cases everything typed or pasted,
+/// punctuation or Writing Tools. Upper-cases everything typed or pasted,
 /// so you get capitals without Caps Lock (and without its on-screen ⇪ indicator).
 struct PlainTextEditor: NSViewRepresentable {
     @Binding var text: String
     var monospaced: Bool
-    var uppercase: Bool
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -84,7 +83,7 @@ struct PlainTextEditor: NSViewRepresentable {
         }
 
         func textView(_ tv: NSTextView, shouldChangeTextIn range: NSRange, replacementString s: String?) -> Bool {
-            guard parent.uppercase, let s, !tv.hasMarkedText() else { return true }
+            guard let s, !tv.hasMarkedText() else { return true }
             let upper = s.uppercased()
             guard upper != s else { return true }
             // Re-insert in capitals; this re-enters here with an unchanged string and goes through.

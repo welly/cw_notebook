@@ -9,7 +9,6 @@ extension Notification.Name {
 enum Prefs {
     static let monospaced = "monospaced"
     static let showReference = "showReference"
-    static let uppercase = "uppercase"
 }
 
 @main
@@ -30,7 +29,6 @@ struct NotebookCommands: Commands {
     let store: NotebookStore
     @AppStorage(Prefs.monospaced) private var monospaced = true
     @AppStorage(Prefs.showReference) private var showReference = false
-    @AppStorage(Prefs.uppercase) private var uppercase = true
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -45,8 +43,6 @@ struct NotebookCommands: Commands {
             .keyboardShortcut("t", modifiers: [.command, .shift])
         }
         CommandGroup(after: .toolbar) {
-            Toggle("Uppercase Typing", isOn: $uppercase)
-                .keyboardShortcut("u", modifiers: [.command, .shift])
             Toggle("Monospaced Font", isOn: $monospaced)
                 .keyboardShortcut("m", modifiers: [.command, .shift])
             Toggle("Show Reference", isOn: $showReference)

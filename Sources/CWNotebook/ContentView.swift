@@ -3,7 +3,6 @@ import SwiftUI
 struct ContentView: View {
     @Environment(NotebookStore.self) private var store
     @AppStorage(Prefs.showReference) private var showReference = false
-    @AppStorage(Prefs.uppercase) private var uppercase = true
     @State private var selection: Note.ID?
     @State private var search = ""
 
@@ -56,10 +55,6 @@ struct ContentView: View {
                     } label: { Label("Insert UTC Time", systemImage: "clock") }
                         .help("Insert the current UTC time (⇧⌘T)")
                         .disabled(selection == nil)
-                    Toggle(isOn: $uppercase) {
-                        Label("Uppercase", systemImage: uppercase ? "capslock.fill" : "capslock")
-                    }
-                    .help(uppercase ? "Typing in capitals, no Caps Lock needed (⇧⌘U)" : "Type in capitals without Caps Lock (⇧⌘U)")
                     Button { showReference.toggle() } label: { Label("Reference", systemImage: "book") }
                         .help("Prosigns, Q-codes and abbreviations (⌥⌘R)")
                 }
@@ -116,7 +111,6 @@ struct NoteRow: View {
 struct NoteEditor: View {
     @Environment(NotebookStore.self) private var store
     @AppStorage(Prefs.monospaced) private var monospaced = true
-    @AppStorage(Prefs.uppercase) private var uppercase = true
     let id: Note.ID
     @State private var text: String
 
@@ -126,7 +120,7 @@ struct NoteEditor: View {
     }
 
     var body: some View {
-        PlainTextEditor(text: $text, monospaced: monospaced, uppercase: uppercase)
+        PlainTextEditor(text: $text, monospaced: monospaced)
             .task(id: text) {
                 guard (try? await Task.sleep(for: .milliseconds(400))) != nil else { return }
                 store.save(id, text: text)
