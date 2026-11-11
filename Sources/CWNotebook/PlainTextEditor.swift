@@ -69,8 +69,33 @@ enum FormatAttributes {
 
 /// Pastes and drops arrive as plain text, so outside formatting never comes in.
 final class NoteTextView: NSTextView {
-    override var readablePasteboardTypes: [NSPasteboard.PasteboardType] { [.string] }
-    override func paste(_ sender: Any?) { pasteAsPlainText(sender) }
+    /// Drop acceptance matches types by their legacy name, so list "NSStringPboardType"
+    /// as well as .string; with .string alone every drop is refused.
+    override var readablePasteboardTypes: [NSPasteboard.PasteboardType] {
+        [.string, NSPasteboard.PasteboardType("NSStringPboardType")]
+    }
+    override func paste(_ sender: Any?) { pasteUpperCased() }
+    override func pasteAsPlainText(_ sender: Any?) { pasteUpperCased() }
+
+    /// The delegate's upper-casing (return false, re-insert) cancels a normal paste
+    /// when the text has lower case, so paste the upper-cased string directly.
+    private func pasteUpperCased() {
+        guard isEditable, let s = NSPasteboard.general.string(forType: .string), !s.isEmpty else { return }
+        insertText(s.uppercased(), replacementRange: selectedRange())
+    }
+
+    /// Drops read the dragged text through here; hand AppKit an upper-cased copy so
+    /// the delegate lets it through instead of cancelling it.
+    override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        guard let s = pboard.string(forType: .string), s.uppercased() != s else {
+            return super.readSelection(from: pboard, type: type)
+        }
+        let upper = NSPasteboard(name: NSPasteboard.Name("CWNotebook.upper.\(UUID().uuidString)"))
+        defer { upper.releaseGlobally() }
+        upper.clearContents()
+        upper.setString(s.uppercased(), forType: .string)
+        return super.readSelection(from: upper, type: .string)
+    }
 }
 
 /// The note body: an NSTextView with no predictions, autocorrect, completion, spell
