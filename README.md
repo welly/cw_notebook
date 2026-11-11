@@ -2,6 +2,14 @@
 
 A simple macOS note taker for CW, in the style of Apple Notes, with a Morse/CW reference panel beside your notes.
 
+## Download
+
+Download `CWNotebook-<version>.zip` from [Releases](https://github.com/welly/cw_notebook/releases/latest), unzip it and move
+**CW Notebook.app** to Applications. It runs on Intel and Apple Silicon Macs with macOS 15 or later.
+
+The app isn't notarised by Apple, so the first time you open it macOS will refuse. Go to **System Settings ›
+Privacy & Security**, scroll down and click **Open Anyway** next to the message about CW Notebook.
+
 ## Using it
 
 - **⌘N** starts a new note. Type the title at the top, then Return or Tab to move into the body. The file keeps the title as its first line (`# Title`). A note you leave without typing anything is discarded.
@@ -25,7 +33,13 @@ Each note is a plain `.md` text file in **iCloud Drive › CW Notebook**, with e
 Needs macOS 15+ and the Xcode Command Line Tools.
 
 ```bash
-./scripts/build-app.sh --install   # builds and copies to ~/Applications
+./scripts/build-app.sh            # builds build/CW Notebook.app (universal)
+./scripts/build-app.sh --install  # also copies it to ~/Applications
+./scripts/build-app.sh --zip      # also makes build/CWNotebook-<version>.zip for a release
 ```
 
 The app icon is drawn by `scripts/make-icon.swift`; run `swift scripts/make-icon.swift` to regenerate `Resources/AppIcon.icns`.
+
+## Licence
+
+MIT, see `LICENSE`.
